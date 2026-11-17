@@ -1,0 +1,15 @@
+[package]
+name = "gnssCaptureR"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4"
+eframe = "0.37"
+rust-ini = "0.21"
+# default features off: no libudev needed on Linux
+serialport = { version = "4.10", default-features = false }
+
+[profile.release]
+opt-level = 3
+strip = true
