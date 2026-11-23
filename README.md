@@ -1,13 +1,11 @@
-# gnssCaptureR 
+# gnssCaptureR
 
 Logs NMEA and u-blox UBX messages from a GPS receiver on a serial (or virtual COM) port.
 Runs on Windows and Linux.
 
-Inspired by the Capture program from GPS Utilities (<https://lefebure.com/software/gpsutils/>). **AI-developed.**
-
 ## Build
 
-Install Rust from <https://rustup.rs>, then in this folder:
+Install Rust from https://rustup.rs, then in this folder:
 
 ```
 cargo build --release
@@ -25,7 +23,7 @@ Linux notes: the user must be allowed to open serial ports
 
 | Tab | Contents |
 |---|---|
-| Serial Port & Capture | Port, baud rate, data bits, parity, stop bits; capture directory, file prefix, write block size, which files to write; Connect / Disconnect. **Refresh** lists the ports and checks each for a u-blox receiver (shown as e.g. `COM4 (U-Blox 6)`). Choosing a u-blox receiver switches its UBX messages on, sets it to 115200 baud, saves this in the receiver, and sets the Baud rate box and ticks the UBX files; choosing another receiver sets its detected baud rate and unticks the UBX files. See `UBX.md`. Below the button: data stream (last 1000 NMEA sentences; Pause / Clear) |
+| Serial Port & Capture | Port, baud rate, data bits, parity, stop bits; capture directory, file prefix, write block size, which files to write; Connect / Disconnect. **Refresh** lists the ports and checks each for a u-blox receiver (shown as e.g. `COM4 (U-Blox 6)`). Choosing a u-blox receiver sets it to 115200 baud, 10 Hz solutions and the message rates below, saves this in the receiver, and sets the Baud rate box and ticks the UBX files; choosing another receiver sets its detected baud rate and unticks the UBX files. See `UBX.md`. Below the button: data stream (last 1000 NMEA sentences; Pause / Clear) |
 | Information | UTC date/time, latitude, longitude, altitude, heading, speed in **knots, km/h and m/s**, GPS type (2D/3D + fix quality), satellites used / in view, HDOP, VDOP, PDOP |
 | Satellite map | Sky plot (filled = used in fix, colour = constellation) and a satellite table |
 | Quality | Signal quality (C/N0, dBHz) of every satellite: bar = mean over the update period, whisker = min..max, bar colour red < 25 ≤ orange < 35 ≤ yellow-green < 45 ≤ green. Below: summary per constellation. Updated every `QualityPeriod` seconds (default 10, can also be changed on the tab) |
@@ -40,6 +38,33 @@ Ctrl+Tab switches to the next tab.
 The status bar shows the connection state, message counters and problems in red:
 `Reconnecting` after the port was lost, `No data for N s` when the port is open but silent,
 file-writing and settings-file errors.
+
+## The u-blox receiver
+
+Choosing a u-blox receiver from the port list sets it up for fast recording and saves the
+settings in the receiver, so they survive a power cycle:
+
+| Setting | Value |
+|---|---|
+| UART baud rate | 115200 |
+| Measurement period | 100 ms |
+| Navigation rate | 1 (one solution per measurement) |
+| UBX-NAV-PVT | 10 Hz |
+| NMEA GGA, RMC | 10 Hz |
+| NMEA GSA, GSV | 1 Hz |
+
+Everything else the program logs (NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SAT, the raw-data
+messages, NMEA GLL and VTG) is set to 1 Hz as well.
+
+Older receivers cannot do 10 Hz: a u-blox 6 (NEO-6M) is limited to 5 Hz and a u-blox 5 to
+4 Hz, so they are set to their own maximum and the messages above follow it (5 Hz and 1 Hz on
+a NEO-6M). u-blox 7 and later reach 10 Hz. The status text next to *Refresh* reports the
+period that was set and the rate the receiver really delivers, measured over three seconds,
+for example `200 ms solutions (4.9 Hz)`.
+
+At 10 Hz the files grow by roughly 20-40 MB per hour with all four of them switched on
+(about 0.5 GB a day); the decoded UBX text file is the largest. Switching off the decoded
+files, or lowering the rate, cuts this.
 
 ## Connection
 
@@ -147,7 +172,7 @@ Maps/50m/ne_50m_land.shp   Natural Earth 1:50m land, used for wide views
 Maps/10m/ne_10m_land.shp   Natural Earth 1:10m land, used when zoomed in
 ```
 
-Natural Earth data are public domain (<https://www.naturalearthdata.com>). Any polygon or polyline
+Natural Earth data are public domain (https://www.naturalearthdata.com). Any polygon or polyline
 shapefile can be used instead: put it into `Maps` and set `File` / `DetailedFile` in
 `gnssCaptureR.ini` (paths relative to `Maps`), e.g. `10m/ne_10m_admin_0_countries.shp` to see
 country borders when zoomed in. Only the `.shp` file is needed; the other files of a shapefile

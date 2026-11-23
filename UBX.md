@@ -38,26 +38,33 @@ writes the MON-VER poll (8 bytes) to every port it checks.
 
 **Choosing a u-blox receiver** from the list:
 
-1. The UBX messages for its generation (section 3) are switched on, at rate 1 (every
-   navigation solution), on the port the command arrives on. NMEA output stays on.
-2. The settings of the port the receiver is connected by are read (CFG-PRT poll) and only
+1. The settings of the port the receiver is connected by are read (CFG-PRT poll) and only
    three things are changed: the baud rate becomes **115200**, UBX is added to the input
    protocols and UBX + NMEA to the output protocols. Everything else (data format, RTCM input)
    stays as it was. A USB port of the receiver has no baud rate, so only the protocols are set.
    If the receiver does not answer the poll, the usual UART1 settings are sent
    (8N1, input UBX+NMEA+RTCM, output UBX+NMEA).
-3. The program switches to 115200 baud itself and saves the configuration in the receiver.
-   The status text says where it went: `saved in the receiver` (u-blox 5 to M8: battery-backed
-   RAM, flash or EEPROM, whatever the receiver has), `saved to flash`, or
-   `saved to battery-backed RAM only` (F9/M10 without flash: kept only while the backup
-   battery lasts), or `not saved`.
-4. The receiver is polled again at the new baud rate to confirm it works.
-5. On success the Baud rate box is set to 115200 and the UBX file checkboxes are ticked.
+2. The program switches to 115200 baud itself. Everything below is sent at that speed, so a
+   faster message rate cannot flood a 9600-baud port.
+3. The **solution period** is set to 100 ms (10 Hz) with a navigation rate of 1, that is one
+   position per measurement. A receiver that cannot do 100 ms gets the shortest period it can:
+   200 ms (5 Hz) on u-blox 6, 250 ms (4 Hz) on u-blox 5. If it still refuses, 200, 500 and
+   1000 ms are tried in turn.
+4. The **message rates** of section 3 are set: position and time messages at every solution
+   (10 Hz), the rest every tenth solution (1 Hz).
+5. The configuration is saved in the receiver. The status text says where it went:
+   `saved in the receiver` (u-blox 5 to M8: battery-backed RAM, flash or EEPROM, whatever the
+   receiver has), `saved to flash`, or `saved to battery-backed RAM only` (F9/M10 without
+   flash: kept only while the backup battery lasts), or `not saved`.
+6. The receiver is polled again at the new baud rate to confirm it works, and the rate it
+   really delivers is measured by counting GGA sentences for three seconds.
+7. On success the Baud rate box is set to 115200 and the UBX file checkboxes are ticked.
    The status text shows the result, e.g.
-   `COM4: U-Blox 6 set to 115200 baud, 7 of 9 UBX messages on, saved in the receiver`
-   ("7 of 9": two messages were refused with NAK, which is normal for messages the
-   module does not support).
-6. If the receiver does not answer after the change, the port is checked again at all baud
+   `COM4: U-Blox 6 set to 115200 baud, 200 ms solutions (4.9 Hz), 13 of 15 message rates set,
+   saved in the receiver`
+   ("13 of 15": two messages were refused with NAK, which is normal for messages the module
+   does not support, such as the raw-data messages on a plain NEO-6M).
+8. If the receiver does not answer after the change, the port is checked again at all baud
    rates. The Baud rate box then shows the rate at which the receiver really answers, and the
    UBX file checkboxes are left as they were.
 
@@ -67,17 +74,42 @@ UBX file checkboxes are unticked.
 Ports are only checked and configured on **Refresh** and when you choose a port from the list.
 **Connect** is disabled while this is running.
 
-## 3. UBX messages switched on, by receiver generation
+## 3. Messages and rates set
 
-| Generation (MON-VER hwVersion) | Configured with | Messages switched on |
-|---|---|---|
-| u-blox 5, 6 (`00040005`, `00040007`), e.g. NEO-6M | CFG-MSG, CFG-PRT, CFG-CFG | NAV-POSLLH, NAV-STATUS, NAV-DOP, NAV-VELNED, NAV-TIMEUTC, NAV-CLOCK, NAV-SVINFO, RXM-RAW, RXM-SFRB |
-| u-blox 7 (`00070000`) | CFG-MSG, CFG-PRT, CFG-CFG | NAV-PVT, NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SVINFO |
-| u-blox M8 (`00080000`) | CFG-MSG, CFG-PRT, CFG-CFG | NAV-PVT, NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SAT, RXM-RAWX, RXM-SFRBX |
-| u-blox F9 (`00190000`), M10 (`000A0000`), protocol 27+ | CFG-VALSET | NAV-PVT, NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SAT, RXM-RAWX, RXM-SFRBX |
+These settings are the program's defaults. 10 Hz means every solution, 1 Hz every tenth
+solution; on a receiver limited to 5 Hz they become 5 Hz and 1 Hz (rate 5).
+
+| Generation (MON-VER hwVersion) | Configured with | At the solution rate (10 Hz) | Once per second |
+|---|---|---|---|
+| u-blox 5, 6 (`00040005`, `00040007`), e.g. NEO-6M | CFG-MSG, CFG-PRT, CFG-RATE, CFG-CFG | NAV-POSLLH, NAV-VELNED, NAV-TIMEUTC, NMEA GGA, RMC | NAV-STATUS, NAV-DOP, NAV-CLOCK, NAV-SVINFO, RXM-RAW, RXM-SFRB, NMEA GSA, GSV, GLL, VTG |
+| u-blox 7 (`00070000`) | CFG-MSG, CFG-PRT, CFG-RATE, CFG-CFG | NAV-PVT, NMEA GGA, RMC | NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SVINFO, NMEA GSA, GSV, GLL, VTG |
+| u-blox M8 (`00080000`) | CFG-MSG, CFG-PRT, CFG-RATE, CFG-CFG | NAV-PVT, NMEA GGA, RMC | NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SAT, RXM-RAWX, RXM-SFRBX, NMEA GSA, GSV, GLL, VTG |
+| u-blox F9 (`00190000`), M10 (`000A0000`), protocol 27+ | CFG-VALSET | NAV-PVT, NMEA GGA, RMC | NAV-DOP, NAV-TIMEUTC, NAV-CLOCK, NAV-SAT, RXM-RAWX, RXM-SFRBX, NMEA GSA, GSV, GLL, VTG |
+
+u-blox 5 and 6 have no NAV-PVT; NAV-POSLLH, NAV-VELNED and NAV-TIMEUTC together carry the
+same data, so those three run at the solution rate instead.
+
+GLL and VTG are not needed by the program but are on by default in every receiver; they are
+put at 1 Hz so they do not take bandwidth at the solution rate. Every other NMEA sentence
+keeps whatever rate the receiver had.
 
 Raw measurement messages (RXM-RAW/SFRB on u-blox 6, RXM-RAWX/SFRBX on M8 and later) exist
 only on some modules (e.g. NEO-6T, NEO-M8T, ZED-F9P); other modules answer NAK, which is harmless.
+
+### Maximum solution rate
+
+| Generation | Maximum navigation update rate |
+|---|---|
+| u-blox 5 | 4 Hz |
+| u-blox 6 (NEO-6M) | 5 Hz |
+| u-blox 7 | 10 Hz |
+| u-blox M8 | 10 Hz (18 Hz with a single constellation) |
+| u-blox F9 | 25 Hz |
+| u-blox M10 | 10 Hz with four constellations, up to 25 Hz with one |
+
+The figures come from the u-blox data sheets. The program never asks for more than 10 Hz.
+At 10 Hz the port must run at 115200 baud: the data are about 3-7 kB/s, which does not fit
+into 9600 baud (960 bytes/s).
 
 ## 4. Message reference
 
@@ -113,10 +145,10 @@ NAV-PVT, NAV-DOP and NAV-SAT also fill the Information, Satellite map, Quality a
 B5 62 0A 04 00 00 0E 34
 ```
 
-### 5.2 Switch a message on or off (UBX-CFG-MSG), u-blox 5 to M8
+### 5.2 Set a message rate (UBX-CFG-MSG), u-blox 5 to M8
 
-Payload: class, id, rate. Rate 1 = every navigation solution, 0 = off. This short form sets the
-rate on the port the command is received on.
+Payload: class, id, rate. Rate 1 = every navigation solution, 10 = every tenth solution,
+0 = off. This short form sets the rate on the port the command is received on.
 
 | Message | On (rate 1) | Off (rate 0) |
 |---|---|---|
@@ -134,7 +166,37 @@ rate on the port the command is received on.
 | RXM-SFRBX | `B5 62 06 01 03 00 02 13 01 20 6C` | `B5 62 06 01 03 00 02 13 00 1F 6B` |
 | RXM-RAWX | `B5 62 06 01 03 00 02 15 01 22 70` | `B5 62 06 01 03 00 02 15 00 21 6F` |
 
-### 5.3 Change the baud rate (UBX-CFG-PRT), u-blox 5 to M8
+### 5.3 NMEA message rates (UBX-CFG-MSG class 0xF0), u-blox 5 to M8
+
+| Sentence | Every solution (rate 1) | Every 10th solution (rate 10) | Off |
+|---|---|---|---|
+| GGA | `B5 62 06 01 03 00 F0 00 01 FB 10` | `B5 62 06 01 03 00 F0 00 0A 04 19` | `B5 62 06 01 03 00 F0 00 00 FA 0F` |
+| RMC | `B5 62 06 01 03 00 F0 04 01 FF 18` | `B5 62 06 01 03 00 F0 04 0A 08 21` | `B5 62 06 01 03 00 F0 04 00 FE 17` |
+| GSA | `B5 62 06 01 03 00 F0 02 01 FD 14` | `B5 62 06 01 03 00 F0 02 0A 06 1D` | `B5 62 06 01 03 00 F0 02 00 FC 13` |
+| GSV | `B5 62 06 01 03 00 F0 03 01 FE 16` | `B5 62 06 01 03 00 F0 03 0A 07 1F` | `B5 62 06 01 03 00 F0 03 00 FD 15` |
+| GLL | `B5 62 06 01 03 00 F0 01 01 FC 12` | `B5 62 06 01 03 00 F0 01 0A 05 1B` | `B5 62 06 01 03 00 F0 01 00 FB 11` |
+| VTG | `B5 62 06 01 03 00 F0 05 01 00 1A` | `B5 62 06 01 03 00 F0 05 0A 09 23` | `B5 62 06 01 03 00 F0 05 00 FF 19` |
+| ZDA | `B5 62 06 01 03 00 F0 08 01 03 20` | `B5 62 06 01 03 00 F0 08 0A 0C 29` | `B5 62 06 01 03 00 F0 08 00 02 1F` |
+
+### 5.4 Solution rate (UBX-CFG-RATE), u-blox 5 to M8
+
+Payload (6 bytes): measRate (ms between measurements), navRate (measurements per navigation
+solution; on u-blox 5 and 6 this cannot be changed and is always 1), timeRef
+(0 = UTC, 1 = GPS time). The commands below use navRate 1 and timeRef 1.
+
+| Period | Rate | Command |
+|---|---|---|
+| 100 ms | 10 Hz | `B5 62 06 08 06 00 64 00 01 00 01 00 7A 12` |
+| 200 ms | 5 Hz | `B5 62 06 08 06 00 C8 00 01 00 01 00 DE 6A` |
+| 250 ms | 4 Hz | `B5 62 06 08 06 00 FA 00 01 00 01 00 10 96` |
+| 500 ms | 2 Hz | `B5 62 06 08 06 00 F4 01 01 00 01 00 0B 77` |
+| 1000 ms | 1 Hz | `B5 62 06 08 06 00 E8 03 01 00 01 00 01 39` |
+
+Poll the current setting: `B5 62 06 08 00 00 0E 30`. A period the receiver cannot do is
+answered with NAK, so the program tries longer periods until one is accepted.
+A message rate is counted in solutions, not in seconds: at 100 ms, rate 10 means once a second.
+
+### 5.5 Change the baud rate (UBX-CFG-PRT), u-blox 5 to M8
 
 Payload (20 bytes): portID `01` (UART1), reserved, txReady `00 00`, mode `D0 08 00 00` (8N1),
 baud rate (4 bytes), inProtoMask `07 00` (UBX+NMEA+RTCM), outProtoMask `03 00` (UBX+NMEA),
@@ -165,7 +227,7 @@ and send them back with only the baud rate changed.
 Alternative NMEA command with the same effect (u-blox 5 to M8):
 `$PUBX,41,1,0007,0003,115200,0*18` (followed by CR LF).
 
-### 5.4 Save / restore the configuration (UBX-CFG-CFG), u-blox 5 to M8
+### 5.6 Save / restore the configuration (UBX-CFG-CFG), u-blox 5 to M8
 
 Payload: clearMask (4), saveMask (4), loadMask (4), deviceMask (1). deviceMask `17` = BBR,
 flash, EEPROM and SPI flash (whatever the receiver has).
@@ -179,7 +241,7 @@ flash, EEPROM and SPI flash (whatever the receiver has).
 Without a backup battery or flash, settings are lost when the receiver is switched off;
 choose the receiver again in gnssCaptureR after Refresh.
 
-### 5.5 u-blox F9 and M10 (UBX-CFG-VALSET)
+### 5.7 u-blox F9 and M10 (UBX-CFG-VALSET)
 
 These receivers use configuration keys. M10 no longer accepts CFG-PRT, CFG-MSG and CFG-CFG.
 Payload: version `00`, layers, reserved `00 00`, then key ID (4 bytes) and value
@@ -198,6 +260,19 @@ gnssCaptureR sends one key per command, so an unsupported key does not block the
 | CFG-MSGOUT-UBX_NAV_SAT UART1 / USB | `0x20910016` / `0x20910018` | rate |
 | CFG-MSGOUT-UBX_RXM_RAWX UART1 / USB | `0x209102A5` / `0x209102A7` | rate |
 | CFG-MSGOUT-UBX_RXM_SFRBX UART1 / USB | `0x20910232` / `0x20910234` | rate |
+| CFG-MSGOUT-NMEA_ID_GGA UART1 / USB | `0x209100BB` / `0x209100BD` | rate |
+| CFG-MSGOUT-NMEA_ID_RMC UART1 / USB | `0x209100AC` / `0x209100AE` | rate |
+| CFG-MSGOUT-NMEA_ID_GSA UART1 / USB | `0x209100C0` / `0x209100C2` | rate |
+| CFG-MSGOUT-NMEA_ID_GSV UART1 / USB | `0x209100C5` / `0x209100C7` | rate |
+| CFG-MSGOUT-NMEA_ID_GLL UART1 / USB | `0x209100CA` / `0x209100CC` | rate |
+| CFG-MSGOUT-NMEA_ID_VTG UART1 / USB | `0x209100B1` / `0x209100B3` | rate |
+| CFG-RATE-MEAS | `0x30210001` | period in ms (2 bytes), e.g. 100 |
+| CFG-RATE-NAV | `0x30210002` | measurements per solution (2 bytes), 1 |
+
+Every NMEA key block holds five ports in the order I2C, UART1, UART2, USB, SPI, so another
+sentence or port is one step away from the ones above (for instance GGA on I2C is
+`0x209100BA`). The value size follows from the key: `0x2091…` keys take one byte,
+`0x3021…` keys two, `0x4052…` four.
 
 Examples:
 
@@ -207,6 +282,12 @@ Examples:
 | NAV-PVT on, USB | `B5 62 06 8A 09 00 00 07 00 00 09 00 91 20 01 5B 82` | `B5 62 06 8A 09 00 00 03 00 00 09 00 91 20 01 57 62` |
 | NAV-SAT on, UART1 | `B5 62 06 8A 09 00 00 07 00 00 16 00 91 20 01 68 C3` | `B5 62 06 8A 09 00 00 03 00 00 16 00 91 20 01 64 A3` |
 | UART1 115200 baud | `B5 62 06 8A 0C 00 00 07 00 00 01 00 52 40 00 C2 01 00 F9 E7` | `B5 62 06 8A 0C 00 00 03 00 00 01 00 52 40 00 C2 01 00 F5 BB` |
+| NMEA GGA every solution, UART1 | `B5 62 06 8A 09 00 00 07 00 00 BB 00 91 20 01 0D FC` | |
+| NMEA RMC every solution, UART1 | `B5 62 06 8A 09 00 00 07 00 00 AC 00 91 20 01 FE B1` | |
+| NMEA GSA every 10th, UART1 | `B5 62 06 8A 09 00 00 07 00 00 C0 00 91 20 0A 1B 1E` | |
+| NMEA GSV every 10th, UART1 | `B5 62 06 8A 09 00 00 07 00 00 C5 00 91 20 0A 20 37` | |
+| Solution period 100 ms | `B5 62 06 8A 0A 00 00 07 00 00 01 00 21 30 64 00 57 EF` | |
+| Navigation rate 1 | `B5 62 06 8A 0A 00 00 07 00 00 02 00 21 30 01 00 F5 2F` | |
 
 ## 6. Sending commands yourself
 

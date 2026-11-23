@@ -225,12 +225,18 @@ fn open(cfg: &Settings) -> serialport::Result<Box<dyn SerialPort>> {
     } else {
         StopBits::One
     };
-    serialport::new(&cfg.port, cfg.baud)
+    let port = serialport::new(&cfg.port, cfg.baud)
         .data_bits(data_bits)
         .parity(parity)
         .stop_bits(stop_bits)
         .timeout(Duration::from_millis(100))
-        .open()
+        .open();
+    if let Ok(p) = &port {
+        // drop anything the driver buffered before the port was opened: old messages
+        // would be logged with the present time and spoil the time difference
+        let _ = p.clear(serialport::ClearBuffer::Input);
+    }
+    port
 }
 
 const RECONNECT_EVERY: Duration = Duration::from_secs(2);
